@@ -58,3 +58,19 @@ python main.py
 Then close the 38,291,484 other flask apps you have running on port 5000 and just go to `http://localhost:5000` in your browser.
 
 aaaaaand you're done.
+
+## Testing
+
+Run the unit tests like so.
+
+`coverage run -m unittest discover`
+
+Generate a coverage report.
+
+`coverage html -d code_coverage`
+
+Then maybe crack that coverage report open in the browser.
+
+`python -m http.server`
+
+weeee

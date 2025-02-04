@@ -1,2 +1,5 @@
 editor_backup.txt
 venv
+*.pyc
+.coverage
+.DS_Store

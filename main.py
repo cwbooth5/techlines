@@ -355,6 +355,14 @@ def lint_code():
         }
         return jsonify({'annotations': [annotation]})
 
+# Add target="_blank" to all <a ...> tags if not already present.
+def add_target(match):
+    tag = match.group(0)
+    if 'target=' in tag:
+        return tag
+    # Insert target="_blank" before the closing '>'.
+    return tag[:-1] + ' target="_blank">'
+
 def fix_svg_urls(svg_text):
     """
     1. Converts any bare URL (in xlink:href or href) that does not start with "http://" or "https://"
@@ -373,13 +381,6 @@ def fix_svg_urls(svg_text):
         r'\1="http://\2"',
         svg_text
     )
-    # Add target="_blank" to all <a ...> tags if not already present.
-    def add_target(match):
-        tag = match.group(0)
-        if 'target=' in tag:
-            return tag
-        # Insert target="_blank" before the closing '>'.
-        return tag[:-1] + ' target="_blank">'
     svg_text = re.sub(r'<a\b[^>]*>', add_target, svg_text)
     return svg_text
 
