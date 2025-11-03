@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <meta charset="UTF-8">
+   <title>TechLines</title>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/addon/lint/lint.min.css">
+   <style>
+       html, body {
+          height: 100%;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          font-family: sans-serif;
+       }
+       #container {
+          display: flex;
+          height: 100%;
+       }
+       #editor-pane {
+          width: 50%;
+          height: 100%;
+          background-color: #2b2b2b;
+       }
+       #viewer-pane {
+          width: 50%;
+          height: 100%;
+          background-color: #fff;
+          display: flex;
+          flex-direction: column;
+       }
+       #toolbar {
+          padding: 10px;
+          background-color: #f0f0f0;
+          border-bottom: 1px solid #ccc;
+       }
+       #graph-container {
+          flex-grow: 1;
+          overflow: auto;
+          padding: 10px;
+       }
+       .CodeMirror {
+          height: 100%;
+       }
+   </style>
+</head>
+<body>
+   <div id="container">
+       <div id="editor-pane"></div>
+       <div id="viewer-pane">
+          <div id="toolbar">
+              <button id="download-svg">Download SVG</button>
+              <button id="download-png">Download PNG</button>
+              <button id="load-svg">Load SVG</button>
+              <!-- Hidden file input for loading an SVG -->
+              <input type="file" id="load-svg-input" accept="image/svg+xml" style="display:none">
+          </div>
+          <div id="graph-container"></div>
+       </div>
+   </div>
+
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/addon/mode/simple.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/addon/lint/lint.min.js"></script>
+   <script src="https://unpkg.com/split.js/dist/split.min.js"></script>
+
+   <script>
+       // Debounce helper function.
+       function debounce(func, wait, immediate) {
+          var timeout;
+          return function() {
+              var context = this, args = arguments;
+              var later = function() {
+                  timeout = null;
+                  if (!immediate) func.apply(context, args);
+              };
+              var callNow = immediate && !timeout;
+              clearTimeout(timeout);
+              timeout = setTimeout(later, wait);
+              if (callNow) func.apply(context, args);
+          };
+       }
+
+       // Define a simple CodeMirror mode for Graphviz DOT language.
+       CodeMirror.defineSimpleMode("dot", {
+           start: [
+               {regex: /"(?:[^\\"]|\\.)*"?/, token: "string"},
+               {regex: /\b(?:digraph|graph|subgraph|node|edge)\b/, token: "keyword"},
+               {regex: /\/\/.*/, token: "comment"},
+               {regex: /\/\*/, token: "comment", next: "comment"},
+               {regex: /->|--/, token: "operator"},
+               {regex: /[{}[\];,]/, token: "bracket"},
+               {regex: /[a-zA-Z_]\w*/, token: "variable"},
+               {regex: /\s+/, token: null}
+           ],
+           comment: [
+               {regex: /.*?\*\//, token: "comment", next: "start"},
+               {regex: /.*/, token: "comment"}
+           ],
+           meta: {
+               lineComment: "//"
+           }
+       });
+
+       // Custom linter: sends code to /lint and updates the lint gutter.
+       function customLinter(text, updateLinting, options, cm) {
+          fetch('/lint', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ code: text })
+          })
+          .then(response => response.json())
+          .then(data => {
+              updateLinting(data.annotations);
+              if (data.annotations.length > 0) {
+                  document.getElementById('graph-container').innerHTML =
+                     "<div style='color:red; font-size:18px; text-align:center; margin-top:20px;'>syntax error</div>";
+              } else {
+                  renderGraph();
+              }
+          })
+          .catch(error => {
+              console.error('Error linting code:', error);
+              updateLinting([]);
+              renderGraph();
+          });
+          return [];
+       }
+
+       // Initialize CodeMirror in the left pane with linting and our custom "dot" mode.
+       var editor = CodeMirror(document.getElementById('editor-pane'), {
+          value: {{ saved_code|tojson }},
+          mode: "dot",
+          theme: "dracula",
+          lineNumbers: true,
+          gutters: ["CodeMirror-lint-markers", "CodeMirror-linenumbers"],
+          lint: {
+             getAnnotations: customLinter,
+             async: true
+          }
+       });
+
+       // Auto-save: send the current code to /save (debounced).
+       var autoSave = debounce(function() {
+          var code = editor.getValue();
+          fetch('/save', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ code: code })
+          }).catch(err => console.error('Auto-save failed:', err));
+       }, 1000);
+
+       // Trigger auto-save on every change.
+       editor.on("change", function() {
+          autoSave();
+       });
+
+       // Render the graph by sending code to the /render endpoint.
+       function renderGraph() {
+          var code = editor.getValue();
+          fetch('/render', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ code: code })
+          })
+          .then(response => response.json())
+          .then(data => {
+              document.getElementById('graph-container').innerHTML = data.svg;
+          })
+          .catch(error => {
+              console.error('Error rendering graph:', error);
+          });
+       }
+
+       // Download SVG file.
+       document.getElementById('download-svg').addEventListener('click', function() {
+          var code = editor.getValue();
+          fetch('/download-svg', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ code: code })
+          })
+          .then(response => response.blob())
+          .then(blob => {
+              var url = window.URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = 'graph.svg';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+          })
+          .catch(error => {
+              console.error('Error downloading SVG:', error);
+          });
+       });
+
+       // Download PNG file.
+       document.getElementById('download-png').addEventListener('click', function() {
+          var code = editor.getValue();
+          fetch('/download-png', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ code: code })
+          })
+          .then(response => response.blob())
+          .then(blob => {
+              var url = window.URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = 'graph.png';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+          })
+          .catch(error => {
+              console.error('Error downloading PNG:', error);
+          });
+       });
+
+       // Load SVG: when the user clicks "Load SVG", trigger the file input.
+       document.getElementById('load-svg').addEventListener('click', function() {
+          document.getElementById('load-svg-input').click();
+       });
+
+       // When an SVG file is selected, read and parse it.
+       document.getElementById('load-svg-input').addEventListener('change', function(e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function(e) {
+              var svgText = e.target.result;
+              // Parse the SVG text to a DOM object.
+              var parser = new DOMParser();
+              var xmlDoc = parser.parseFromString(svgText, "image/svg+xml");
+              // Look for our embedded dot code.
+              var metadataElem = xmlDoc.getElementById("graphviz-dot");
+              if (metadataElem) {
+                  var dotCode = metadataElem.textContent;
+                  // Validate the code by sending it to /lint.
+                  fetch('/lint', {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ code: dotCode })
+                  })
+                  .then(response => response.json())
+                  .then(data => {
+                      if (data.annotations && data.annotations.length > 0) {
+                          alert("The embedded DOT code in the SVG has syntax errors and will not be loaded.");
+                      } else {
+                          // Load the valid DOT code into the editor.
+                          editor.setValue(dotCode);
+                          editor.performLint();
+                      }
+                  })
+                  .catch(err => {
+                      console.error("Error validating the loaded DOT code:", err);
+                      alert("Error validating the loaded DOT code.");
+                  });
+              } else {
+                  alert("No embedded Graphviz DOT code found in this SVG file.");
+              }
+          };
+          reader.readAsText(file);
+       });
+
+       // Also attempt a final save on unload.
+       window.addEventListener('unload', function() {
+           var code = editor.getValue();
+           if (navigator.sendBeacon) {
+               var blob = new Blob([JSON.stringify({ code: code })], { type: 'application/json' });
+               navigator.sendBeacon('/save', blob);
+           } else {
+               var xhr = new XMLHttpRequest();
+               xhr.open("POST", "/save", false);
+               xhr.setRequestHeader("Content-Type", "application/json");
+               xhr.send(JSON.stringify({ code: code }));
+           }
+       });
+
+       // Initialize Split.js to allow resizing between the editor and viewer panes.
+       Split(['#editor-pane', '#viewer-pane'], {
+          sizes: [50, 50],
+          minSize: 200,
+          gutterSize: 8,
+          cursor: 'col-resize'
+       });
+
+       // Trigger an initial lint to render the graph.
+       setTimeout(function(){ editor.performLint(); }, 100);
+   </script>
+</body>
+</html>

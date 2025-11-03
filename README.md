@@ -27,15 +27,7 @@ If you click that link, it should take you to `example.com` in another tab.
 
 ## Setup and Startup
 
-The application is a single python file. It pulls down a few stylesheets from the Internet. This setup is the bare-bones way of running TechLines. You can throw it in a container or service if you like. Anyway, here's the basic procedure.
-
-Create a python virtual environment.
-
-```
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+The application is a single python file and a template. It pulls down a few stylesheets from the Internet. This setup is the bare-bones way of running TechLines. Anyway, here's the basic procedure.
 
 Don't forget this uses the `dot` graphviz engine. You can test quickly to see if you have `dot` installed. It should display some sort of version string.
 
@@ -52,7 +44,7 @@ If you don't have that installed:
 Then run the server. By default it should listen like a good little default flask app on `http://localhost:5000`.
 
 ```
-python main.py
+uv run main.py
 ```
 
 Then close the 38,291,484 other flask apps you have running on port 5000 and just go to `http://localhost:5000` in your browser.
@@ -63,11 +55,11 @@ aaaaaand you're done.
 
 Run the unit tests like so.
 
-`coverage run -m unittest discover`
+`uv run pytest`
 
-Generate a coverage report.
+Run tests and generate a coverage report.
 
-`coverage html -d code_coverage`
+`uv run pytest --cov=. --cov-report=term-missing --cov-report=html`
 
 Then maybe crack that coverage report open in the browser.
 
