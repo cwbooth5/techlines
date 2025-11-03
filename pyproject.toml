@@ -1,0 +1,16 @@
+[project]
+name = "techlines"
+version = "0.1.0"
+description = "Browser based graphviz server and viewer"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.1.2",
+    "graphviz>=0.21",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest-cov>=7.0.0",
+    "pytest>=8.4.2",
+]
