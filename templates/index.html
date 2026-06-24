@@ -115,9 +115,9 @@
           .then(data => {
               updateLinting(data.annotations);
               if (data.annotations.length > 0) {
-                  document.getElementById('graph-container').innerHTML =
-                     "<div style='color:red; font-size:18px; text-align:center; margin-top:20px;'>syntax error</div>";
-              } else {
+    const msg = data.annotations[0].message;
+    document.getElementById('graph-container').innerHTML = `<div style='color:red; font-size:18px; text-align:center; margin-top:20px;'>${msg}</div>`;
+} else {
                   renderGraph();
               }
           })

@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, make_response, render_template
+from graphviz import ExecutableNotFound
 import graphviz
 import re
 import argparse
@@ -28,9 +29,13 @@ def render_graph():
         # Fix any relative URLs in the SVG.
         svg_data = fix_svg_urls(svg_data)
         return jsonify({'svg': svg_data})
-    except Exception:
+    except ExecutableNotFound:
         error_svg = ("<svg xmlns='http://www.w3.org/2000/svg' width='400' height='50'>"
-                     "<text x='10' y='25' fill='red'>Error: syntax error</text></svg>")
+                     "<text x='10' y='25' fill='red'>Error: Graphviz (dot) not installed on server</text></svg>")
+        return jsonify({'svg': error_svg})
+    except Exception as e:
+        error_svg = ("<svg xmlns='http://www.w3.org/2000/svg' width='400' height='50'>"
+                     f"<text x='10' y='25' fill='red'>Error: {str(e)}</text></svg>")
         return jsonify({'svg': error_svg})
 
 @app.route('/lint', methods=['POST'])
@@ -44,6 +49,8 @@ def lint_code():
         src = graphviz.Source(code, engine='dot')
         src.pipe(format='svg')
         return jsonify({'annotations': []})
+    except ExecutableNotFound:
+        return jsonify({'annotations': [{'from': {'line': 0, 'ch': 0}, 'to': {'line': 0, 'ch': 0}, 'message': 'Graphviz (dot) not installed on server', 'severity': 'error'}]})
     except Exception as e:
         message = str(e)
         match = re.search(r'line\s+(\d+)', message, re.IGNORECASE)
@@ -51,7 +58,7 @@ def lint_code():
         annotation = {
             'from': {'line': line, 'ch': 0},
             'to': {'line': line, 'ch': 0},
-            'message': "Syntax error",
+            'message': message,
             'severity': "error"
         }
         return jsonify({'annotations': [annotation]})
